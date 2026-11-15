@@ -1,0 +1,33 @@
+{
+  "name": "Vex",
+  "userName": "Laith",
+  "tickSeconds": 5,
+  "ackWindowSeconds": 60,
+  "actionCooldownSeconds": 300,
+  "allowHide": true,
+  "voice": true,
+  "voiceName": "Samantha",
+  "voiceRate": 195,
+  "sniffBrowserURLs": true,
+  "betrayalApps": ["com.valvesoftware.steam", "Steam", "Netflix", "com.hnc.Discord", "Discord", "TikTok", "Twitch", "Minecraft"],
+  "productiveApps": ["com.microsoft.VSCode", "Cursor", "com.todesktop.230313mzl4w4u92", "T3 Code (Beta)", "Codex", "Xcode", "Terminal", "com.apple.Terminal", "iTerm2", "Ghostty", "Obsidian", "Notes"],
+  "protectedApps": ["Terminal", "com.apple.Terminal", "iTerm2", "Ghostty", "Hermes", "com.microsoft.VSCode", "Cursor", "T3 Code (Beta)", "Codex", "Xcode", "Finder", "System Settings", "1Password"],
+  "betrayalSites": ["youtube.com", "reddit.com", "x.com", "twitter.com", "twitch.tv", "netflix.com", "instagram.com", "tiktok.com", "kick.com"],
+  "productiveSites": ["leetcode.com", "github.com", "neetcode.io", "linkedin.com", "greenhouse.io", "lever.co", "ashbyhq.com", "docs.google.com", "developer.apple.com", "stackoverflow.com"],
+  "mood": {
+    "betrayalPerMinute": 24,
+    "idlePerMinute": 10,
+    "idleThresholdSeconds": 120,
+    "productiveReliefPerMinute": 18,
+    "neutralReliefPerMinute": 4,
+    "ignoredPenalty": 12,
+    "apologyRelief": 30,
+    "sulkSeconds": 120,
+    "forgivingSeconds": 25
+  },
+  "llm": {
+    "enabled": true,
+    "model": "qwen/qwen3.8-flash",
+    "timeoutSeconds": 12
+  }
+}
