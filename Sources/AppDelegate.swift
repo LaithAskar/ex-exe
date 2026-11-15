@@ -40,7 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let now = Date()
             if StateStore.isGrudge(saved, now: now) { openingLine = .grudge }
             _ = engine.restore(annoyance: saved.annoyance, savedAt: saved.savedAt, now: now)
-            log("restored grudge: was \(saved.mood.rawValue) \(Int(100 - saved.annoyance)) affection, now \(engine.affection) (\(engine.mood.rawValue))")
+            log("restored state: was \(saved.mood.rawValue) \(Int(100 - saved.annoyance)) affection, now \(engine.affection) (\(engine.mood.rawValue))")
         }
         policy = ActionPolicy(cooldownSeconds: config.actionCooldownSeconds)
         sensors = Sensors(config: config)
