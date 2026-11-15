@@ -2,4 +2,5 @@ build/
 logs/
 data/topics.json
 data/x_topics.json
+data/state.json
 .DS_Store

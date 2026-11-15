@@ -4,6 +4,8 @@ A pixel-art ex-girlfriend named Vex who lives in the corner of your Mac, notices
 
 Native Swift + a WKWebView for the game UI. **Zero third-party dependencies.**
 
+![Vex in every mood](docs/screenshots/vex-sheet.png)
+
 ## Run
 
 ```sh
@@ -61,7 +63,30 @@ She never types, clicks, closes, quits, or touches anything in `protectedApps`. 
 
 ## Topics ("Twitter rambling")
 
-`scripts/refresh_topics.py` pulls Hacker News top stories into `data/topics.json` (on every `run.sh`). If `data/x_topics.json` exists (`{"topics":[{"title": "..."}]}`), those go first. That's the hook for an X timeline reader (see Roadmap).
+Every 30 min (and on `run.sh`), `scripts/refresh_topics.py` merges:
+
+1. **X**: `scripts/x_reader.mjs` reads your home timeline and the trending tab using headless Chrome over the DevTools protocol. It uses a **dedicated profile** at `~/.config/ex-exe/chrome-x`, not your main Chrome profile. It only reads the DOM: no clicks, likes, posts, or follows. It picks the top ~12 tweets by likes plus ~10 trends, strips links, and skips ads. Data older than 12h is ignored.
+2. **Hacker News** top stories (public API), as a fallback when X is unavailable.
+
+One-time X setup (you log in yourself; the agent never sees your password):
+
+```sh
+node scripts/x_reader.mjs --login   # opens a separate Chrome window -> log into X -> close it
+node scripts/x_reader.mjs           # test read; prints "wrote N topics"
+```
+
+If X shows a login wall later (session expired), the reader exits 3 and she falls back to HN.
+
+## Launch at login + memory
+
+```sh
+./scripts/install_login.sh     # LaunchAgent com.laithaskar.exexe (RunAtLoad, no KeepAlive)
+./scripts/uninstall_login.sh
+```
+
+Quitting her (⌃⌥⌘Q, menu, or `launchctl`/`pkill`, since SIGTERM is caught) keeps her quit until next login.
+
+Her grudge is saved to `data/state.json` every minute and on quit. It cools off at 6 points/hour while she's closed. Quit her mid-fight and relaunch within an hour and she opens with "You QUIT me? While I was mad? Bold."
 
 ## Tuning
 
@@ -69,8 +94,6 @@ Everything lives in `data/config.json`. Missing keys fall back to defaults. Edit
 
 ## Roadmap
 
-- [ ] X timeline -> `x_topics.json` via a scheduled read-only job against the logged-in Chrome session
 - [ ] Real sprite sheet (current art is hand-placed 20x22 pixels in `web/sprite.js`)
 - [ ] Webcam gaze (MediaPipe) for "you looked away" detection
-- [ ] Launch at login (LaunchAgent)
-- [ ] Persist affection across restarts so quitting her doesn't reset the grudge
+- [ ] LLM summaries of X threads instead of raw tweet snippets

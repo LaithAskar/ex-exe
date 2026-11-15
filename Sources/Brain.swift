@@ -66,6 +66,7 @@ final class Brain {
         case .betrayal: return "He just switched to something distracting."
         case .periodic: return "Nothing new happened. Keep talking anyway."
         case .ignored: return "You said something a minute ago and he didn't respond."
+        case .grudge: return "He quit you while you were mad and just relaunched you. You remember. You are not over it."
         case .returned: return "He was away from the computer for a while and just came back."
         case .apologyAccepted: return "He clicked sorry. Accept it, reluctantly."
         case .apologyGrudging: return "He clicked sorry a second time. Accept it grudgingly."

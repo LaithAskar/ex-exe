@@ -27,10 +27,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var screenLocked = false
     private var displayAsleep = false
     private var away = false
+    private var openingLine: LineEvent? = .greeting   // said once, when he's actually present
+    private var lastSaveAt = Date.distantPast
+    private var sigtermSource: DispatchSourceSignal?
+    private var topicRefresh: Process?
+    private var lastTopicRefreshAt = Date()
 
     func applicationDidFinishLaunching(_ n: Notification) {
         config = Config.load()
         engine = MoodEngine(config: config.mood)
+        if let saved = StateStore.load(from: Paths.state) {
+            let now = Date()
+            if StateStore.isGrudge(saved, now: now) { openingLine = .grudge }
+            _ = engine.restore(annoyance: saved.annoyance, savedAt: saved.savedAt, now: now)
+            log("restored grudge: was \(saved.mood.rawValue) \(Int(100 - saved.annoyance)) affection, now \(engine.affection) (\(engine.mood.rawValue))")
+        }
         policy = ActionPolicy(cooldownSeconds: config.actionCooldownSeconds)
         sensors = Sensors(config: config)
         brain = Brain(config: config)
@@ -51,13 +62,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wnc.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in self?.displayAsleep = true }
         wnc.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in self?.displayAsleep = false }
 
+        // launchctl/pkill send SIGTERM, which skips applicationWillTerminate. Route it through a clean quit so the grudge is saved.
+        signal(SIGTERM, SIG_IGN)
+        let term = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        term.setEventHandler { NSApp.terminate(nil) }
+        term.resume()
+        sigtermSource = term
+
         overlay.show()
         timer = Timer.scheduledTimer(withTimeInterval: config.tickSeconds, repeats: true) { [weak self] _ in self?.tick() }
+        // First topic refresh shortly after launch (launch-at-login skips run.sh), then every topicRefreshMinutes.
+        lastTopicRefreshAt = Date().addingTimeInterval(-config.topicRefreshMinutes * 60 + 30)
         log("EX.EXE online. home=\(Paths.home.path) llm=\(brain.online ? config.llm.model : "offline (canned lines)")")
         log("kill switch: ctrl+opt+cmd+X hands-off, ctrl+opt+cmd+Q quit, ctrl+opt+cmd+M mute")
     }
 
     func applicationWillTerminate(_ n: Notification) {
+        saveState()
+        topicRefresh?.terminate()
         speaker?.stop()
         log("EX.EXE offline")
     }
@@ -84,13 +106,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let front = sensors.front()
         lastFront = front
         if front.key != currentKey { currentKey = front.key; currentKeySince = now }
+        if now.timeIntervalSince(lastSaveAt) >= 60 { saveState() }
+        if now.timeIntervalSince(lastTopicRefreshAt) >= config.topicRefreshMinutes * 60 { refreshTopics() }
 
-        if away {
+        if away || openingLine != nil {
+            if away { log("back - affection \(engine.affection)") }
             away = false
-            log("back - affection \(engine.affection)")
             pushState(front)
             cadence.lastSpokeAt = now
-            speak(.returned, front)
+            speak(openingLine ?? .returned, front)
+            openingLine = nil
             return
         }
 
@@ -120,6 +145,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
            let what = actions.perform(action, front: front) {
             log("ACTION \(action.rawValue): \(what)")
         }
+    }
+
+    private func saveState() {
+        StateStore.save(SavedState(annoyance: engine.annoyance, mood: engine.mood, savedAt: Date()), to: Paths.state)
+        lastSaveAt = Date()
+    }
+
+    /// Runs scripts/refresh_topics.py (HN + X reader) in the background. Never blocks the UI.
+    private func refreshTopics() {
+        lastTopicRefreshAt = Date()
+        guard topicRefresh?.isRunning != true else { return }
+        let script = Paths.home.appendingPathComponent("scripts/refresh_topics.py")
+        guard FileManager.default.fileExists(atPath: script.path) else { return }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        p.arguments = [script.path]
+        var env = ProcessInfo.processInfo.environment
+        env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+        p.environment = env
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = pipe
+        p.terminationHandler = { proc in
+            let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            let summary = out.split(separator: "\n").suffix(2).joined(separator: " | ")
+            DispatchQueue.main.async { log("topics refreshed (exit \(proc.terminationStatus)): \(summary)") }
+        }
+        do { try p.run(); topicRefresh = p } catch { log("topic refresh failed to start: \(error.localizedDescription)") }
     }
 
     private func userIsAway(idle: Double = Sensors.idleSeconds()) -> Bool {
@@ -170,7 +223,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "ready":
             pushState(front)
             if userIsAway() { away = true; log("launched while away - greeting deferred"); return }
-            speak(.greeting, front)
+            speak(openingLine ?? .greeting, front)
+            openingLine = nil
             cadence.lastSpokeAt = now
         case "ack":
             awaitingAckSince = nil

@@ -43,10 +43,13 @@
       $("appname").textContent = s.app;
       if (s.name) { $("name").textContent = s.name.toUpperCase(); $("tag").textContent = s.name.toUpperCase(); }
     },
-    say({ text }) {
+    say({ text, instant }) {
       clearInterval(typing);
       $("caret").classList.remove("on");
       const el = $("text"); el.textContent = "";
+      if (instant || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        el.textContent = text; $("caret").classList.add("on"); return;
+      }
       let i = 0;
       const speed = mood === "furious" ? 18 : mood === "sulking" ? 70 : 32;
       typing = setInterval(() => {

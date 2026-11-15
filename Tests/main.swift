@@ -132,5 +132,33 @@ do {
     check(Lines.byEvent[.returned]!.contains(Lines.pick(ctx, avoiding: [])), "returned uses event lines")
 }
 
+// 12. Grudge persistence: decay, restore lands in the right mood, round-trips to disk.
+do {
+    check(MoodEngine.decayed(80, elapsed: 3600, perHour: 6) == 74, "decays 6/hour")
+    check(MoodEngine.decayed(5, elapsed: 86_400, perHour: 6) == 0, "floors at 0")
+    check(MoodEngine.decayed(50, elapsed: -100, perHour: 6) == 50, "clock skew doesn't raise it")
+    var e = MoodEngine()
+    _ = e.restore(annoyance: 70, savedAt: at(0), now: at(600))   // 10 min later -> 69
+    check(e.mood == .furious && e.affection == 31, "restored furious, got \(e.mood) \(e.affection)")
+    var e2 = MoodEngine()
+    _ = e2.restore(annoyance: 95, savedAt: at(0), now: at(60))
+    check(e2.mood == .sulking, "90+ grudge restarts the silent treatment")
+    var e3 = MoodEngine()
+    _ = e3.restore(annoyance: 70, savedAt: at(0), now: at(86_400))
+    check(e3.mood == .chill, "a day later she's over it")
+
+    let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("exe-state-\(getpid()).json")
+    let s = SavedState(annoyance: 42.5, mood: .scolding, savedAt: Date(timeIntervalSince1970: 1_700_000_000))
+    StateStore.save(s, to: url)
+    check(StateStore.load(from: url) == s, "state round-trips")
+    try? FileManager.default.removeItem(at: url)
+    check(StateStore.load(from: url) == nil, "missing state -> nil")
+    check(StateStore.isGrudge(s, now: s.savedAt.addingTimeInterval(1800)), "quit mid-fight within the hour = grudge")
+    check(!StateStore.isGrudge(s, now: s.savedAt.addingTimeInterval(7200)), "no grudge after an hour")
+    check(!StateStore.isGrudge(SavedState(annoyance: 5, mood: .chill, savedAt: s.savedAt), now: s.savedAt), "no grudge when chill")
+    let g = Lines.pick(LineContext(mood: .furious, event: .grudge, appLabel: "x", minutesOnApp: 0, affection: 31, topic: nil), avoiding: [])
+    check(!g.contains("{"), "grudge line filled: \(g)")
+}
+
 print("\(passes) passed, \(failures) failed")
 exit(failures == 0 ? 0 : 1)

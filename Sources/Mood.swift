@@ -37,6 +37,7 @@ struct MoodConfig: Codable {
     var apologyRelief: Double = 30
     var sulkSeconds: Double = 120
     var forgivingSeconds: Double = 25
+    var grudgeDecayPerHour: Double = 6
 }
 
 enum ApologyResult: Equatable {
@@ -79,6 +80,17 @@ struct MoodEngine {
         if input.ignoredLine { delta += config.ignoredPenalty }
 
         annoyance = min(100, max(0, annoyance + delta))
+        return resolve(now: now)
+    }
+
+    /// Annoyance after being closed for `elapsed` seconds. She cools off slowly.
+    static func decayed(_ saved: Double, elapsed: Double, perHour: Double) -> Double {
+        min(100, max(0, saved - max(0, elapsed) / 3600 * perHour))
+    }
+
+    /// Restore a saved grudge. Lands in the matching mood (a 90+ grudge restarts the silent treatment).
+    mutating func restore(annoyance saved: Double, savedAt: Date, now: Date) -> Mood? {
+        annoyance = MoodEngine.decayed(saved, elapsed: now.timeIntervalSince(savedAt), perHour: config.grudgeDecayPerHour)
         return resolve(now: now)
     }
 

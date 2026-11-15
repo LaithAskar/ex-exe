@@ -3,7 +3,7 @@ import Foundation
 // Offline dialogue. Used when there's no API key or the LLM call fails.
 
 enum LineEvent: String {
-    case greeting, moodChange, betrayal, periodic, ignored, returned
+    case greeting, moodChange, betrayal, periodic, ignored, returned, grudge
     case apologyAccepted, apologyGrudging, apologyRejected
 }
 
@@ -59,6 +59,7 @@ enum Lines {
 
     static let byEvent: [LineEvent: [String]] = [
         .greeting: ["Oh. You finally opened me. Took you long enough."],
+        .grudge: ["You QUIT me? While I was mad? Bold.", "Oh, you thought restarting me would reset things? Cute.", "I remember everything. Affection {aff}. Earn it back."],
         .returned: ["Oh. You're back. I didn't notice you were gone. At all.", "Where were you? Don't answer that. Sit down. LeetCode."],
         .ignored: ["Wow. Left on read. By someone who lives on his computer.", "I can SEE you not clicking me."],
         .apologyAccepted: ["...okay. Apology accepted. Don't make it weird."],
@@ -81,6 +82,7 @@ enum Lines {
             .replacingOccurrences(of: "{app}", with: ctx.appLabel)
             .replacingOccurrences(of: "{min}", with: String(max(1, ctx.minutesOnApp)))
             .replacingOccurrences(of: "{topic}", with: ctx.topic ?? "literally anything")
+            .replacingOccurrences(of: "{aff}", with: String(ctx.affection))
     }
 
     /// Trim LLM output to something that fits the dialogue box.

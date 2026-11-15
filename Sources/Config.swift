@@ -12,6 +12,7 @@ struct Config: Codable {
     var tickSeconds: Double = 5
     var ackWindowSeconds: Double = 60
     var awaySeconds: Double = 600
+    var topicRefreshMinutes: Double = 30
     var actionCooldownSeconds: Double = 300
     var allowHide: Bool = true
     var voice: Bool = true
@@ -42,6 +43,7 @@ enum Paths {
     static var web: URL { home.appendingPathComponent("web") }
     static var config: URL { home.appendingPathComponent("data/config.json") }
     static var topics: URL { home.appendingPathComponent("data/topics.json") }
+    static var state: URL { home.appendingPathComponent("data/state.json") }
     static var keyFile: URL {
         FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/ex-exe/openrouter_key")
     }

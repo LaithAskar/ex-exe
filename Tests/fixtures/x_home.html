@@ -1,0 +1,30 @@
+<!doctype html>
+<html><body>
+<!-- Mimics X's DOM test ids. Used by scripts/test.sh to verify the extractors without logging in. -->
+<article data-testid="tweet">
+  <div data-testid="User-Name"><span>Some Dev</span><span>@somedev</span></div>
+  <div data-testid="tweetText">Hot take: most new-grad interviews still test DSA because it's cheap to grade, not because it predicts anything.</div>
+  <a href="https://x.com/somedev/status/111">time</a>
+  <button data-testid="like" aria-label="1.2K Likes. Like"></button>
+</article>
+<article data-testid="tweet">
+  <div data-testid="User-Name"><span>Ad Co</span><span>@adco</span></div>
+  <div data-testid="tweetText">Buy our AI-powered toaster, now with agents.</div>
+  <span>Ad</span>
+  <button data-testid="like" aria-label="9M Likes. Like"></button>
+</article>
+<article data-testid="tweet">
+  <div data-testid="User-Name"><span>Rustacean</span><span>@crab</span></div>
+  <div data-testid="tweetText">We rewrote the build system in Rust and CI went from 14 minutes to 3. https://t.co/abc</div>
+  <a href="https://x.com/crab/status/222">time</a>
+  <button data-testid="unlike" aria-label="3,401 Likes. Liked"></button>
+</article>
+<article data-testid="tweet">
+  <div data-testid="User-Name"><span>Short</span><span>@short</span></div>
+  <div data-testid="tweetText">lol</div>
+  <button data-testid="like" aria-label="50 Likes. Like"></button>
+</article>
+<div data-testid="trend"><div><span>1 · Trending in Technology</span></div><div><span>Rust</span></div><div><span>12.4K posts</span></div></div>
+<div data-testid="trend"><div><span>Trending</span></div><div><span>#LeetCode</span></div><div><span>3,201 posts</span></div></div>
+<div data-testid="trend"><div><span>Only on X · Trending</span></div><div><span>OpenAI</span></div></div>
+</body></html>
