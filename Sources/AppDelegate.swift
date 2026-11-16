@@ -32,6 +32,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var sigtermSource: DispatchSourceSignal?
     private var topicRefresh: Process?
     private var lastTopicRefreshAt = Date()
+    private var demoToken = 0                 // bumping it cancels a running demo
+    private var demoRunning = false
+    private var demoSorry: (() -> Void)?
+    private var demoItem: NSMenuItem!
+    private var usr1Source: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ n: Notification) {
         config = Config.load()
@@ -54,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         HotKey.register(keyCode: kVK_ANSI_X, id: 1) { [weak self] in self?.toggleHandsOff() }
         HotKey.register(keyCode: kVK_ANSI_Q, id: 2) { NSApp.terminate(nil) }
         HotKey.register(keyCode: kVK_ANSI_M, id: 3) { [weak self] in self?.toggleMute() }
+        HotKey.register(keyCode: kVK_ANSI_D, id: 4) { [weak self] in self?.toggleDemo() }
 
         let dnc = DistributedNotificationCenter.default()
         dnc.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in self?.screenLocked = true }
@@ -68,13 +74,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         term.setEventHandler { NSApp.terminate(nil) }
         term.resume()
         sigtermSource = term
+        // scripts/demo.sh sends SIGUSR1 so a demo can be started from a terminal / screen recorder.
+        signal(SIGUSR1, SIG_IGN)
+        let usr1 = DispatchSource.makeSignalSource(signal: SIGUSR1, queue: .main)
+        usr1.setEventHandler { [weak self] in self?.toggleDemo() }
+        usr1.resume()
+        usr1Source = usr1
 
         overlay.show()
         timer = Timer.scheduledTimer(withTimeInterval: config.tickSeconds, repeats: true) { [weak self] _ in self?.tick() }
         // First topic refresh shortly after launch (launch-at-login skips run.sh), then every topicRefreshMinutes.
         lastTopicRefreshAt = Date().addingTimeInterval(-config.topicRefreshMinutes * 60 + 30)
         log("EX.EXE online. home=\(Paths.home.path) llm=\(brain.online ? config.llm.model : "offline (canned lines)")")
-        log("kill switch: ctrl+opt+cmd+X hands-off, ctrl+opt+cmd+Q quit, ctrl+opt+cmd+M mute")
+        log("kill switch: ctrl+opt+cmd+X hands-off, ctrl+opt+cmd+Q quit, ctrl+opt+cmd+M mute, ctrl+opt+cmd+D demo")
     }
 
     func applicationWillTerminate(_ n: Notification) {
@@ -87,6 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: loop
 
     private func tick() {
+        if demoRunning { lastTick = Date(); return }
         let now = Date()
         let dt = min(now.timeIntervalSince(lastTick), 30) // don't punish across sleep
         lastTick = now
@@ -230,6 +243,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             awaitingAckSince = nil
             if let m = engine.acknowledge(now: now) { log("mood -> \(m.rawValue) (ack)") }
             pushState(front)
+        case "sorry" where demoRunning:
+            demoSorry?()
+        case "ack" where demoRunning:
+            break
         case "sorry":
             awaitingAckSince = nil
             let (result, _) = engine.apologize(now: now)
@@ -246,6 +263,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: demo
+
+    private func toggleDemo() {
+        if demoRunning { endDemo(reason: "cancelled"); return }
+        let front = sensors.front()
+        lastFront = front
+        let label = front.category == .her ? "your computer" : front.label
+        let steps = DemoScript.steps(app: label, topic: topics.next(), onBetrayal: front.category == .betrayal)
+        demoRunning = true
+        demoToken += 1
+        demoItem.state = .on
+        log("DEMO start on \(front.label) (\(steps.count) steps)")
+        playDemo(steps, at: 0, token: demoToken, front: front)
+    }
+
+    private func playDemo(_ steps: [DemoStep], at i: Int, token: Int, front: FrontContext) {
+        guard token == demoToken, demoRunning else { return }
+        guard i < steps.count else { endDemo(reason: "done"); return }
+        let s = steps[i]
+        overlay.call("setState", ["mood": s.mood.rawValue, "label": s.mood.label, "affection": s.affection,
+                                  "app": front.label, "handsOff": handsOff, "name": config.name])
+        statusItem.button?.title = "\(s.mood == .furious ? "💢" : s.mood == .sulking ? "…" : "♥") \(s.affection)"
+        overlay.call("say", ["text": s.text])
+        speaker.say(s.text)
+        log("DEMO \(i + 1)/\(steps.count) [\(s.mood.rawValue)] \(s.text)")
+        if let a = s.action, !handsOff {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                guard let self, token == self.demoToken, self.demoRunning else { return }
+                if let what = self.actions.perform(a, front: front) { log("DEMO ACTION \(a.rawValue): \(what)") }
+            }
+        }
+        let advance = { [weak self] in
+            guard let self, token == self.demoToken else { return }
+            self.demoSorry = nil
+            self.playDemo(steps, at: i + 1, token: token, front: front)
+        }
+        if s.waitForSorry {
+            overlay.call("fx", ["name": "pulse"])
+            var fired = false
+            let once = { if !fired { fired = true; advance() } }
+            demoSorry = once
+            DispatchQueue.main.asyncAfter(deadline: .now() + s.hold) { once() }
+        } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + s.hold) { advance() }
+        }
+    }
+
+    private func endDemo(reason: String) {
+        demoRunning = false
+        demoToken += 1
+        demoSorry = nil
+        demoItem.state = .off
+        let now = Date()
+        cadence.lastSpokeAt = now
+        policy.lastActionAt = now      // no real action right after the show
+        awaitingAckSince = nil
+        lastTick = now
+        if let f = lastFront { pushState(f) }
+        log("DEMO \(reason); back to real mood \(engine.mood.rawValue) (\(engine.affection))")
+    }
+
     // MARK: menu bar
 
     private func setupStatusItem() {
@@ -256,7 +334,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         muteItem = NSMenuItem(title: "Mute voice (⌃⌥⌘M)", action: #selector(toggleMuteMenu), keyEquivalent: "")
         let sorry = NSMenuItem(title: "Apologize", action: #selector(apologizeMenu), keyEquivalent: "")
         let quit = NSMenuItem(title: "Quit EX.EXE (⌃⌥⌘Q)", action: #selector(quitMenu), keyEquivalent: "")
-        for item in [handsOffItem!, muteItem!, sorry] { item.target = self; menu.addItem(item) }
+        demoItem = NSMenuItem(title: "Run demo (⌃⌥⌘D)", action: #selector(demoMenu), keyEquivalent: "")
+        for item in [handsOffItem!, muteItem!, sorry, demoItem!] { item.target = self; menu.addItem(item) }
         menu.addItem(.separator())
         quit.target = self
         menu.addItem(quit)
@@ -282,4 +361,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleMuteMenu() { toggleMute() }
     @objc private func apologizeMenu() { handleUI(["type": "sorry"]) }
     @objc private func quitMenu() { NSApp.terminate(nil) }
+    @objc private func demoMenu() { toggleDemo() }
 }

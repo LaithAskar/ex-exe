@@ -160,5 +160,18 @@ do {
     check(!g.contains("{"), "grudge line filled: \(g)")
 }
 
+// 13. Demo script: every mood shows up, ends forgiving, fits in a short clip, hide only on betrayal.
+do {
+    let a = DemoScript.steps(app: "YouTube in Google Chrome", topic: "Cowboys (trending in Sports on X)", onBetrayal: true)
+    let b = DemoScript.steps(app: "Finder", topic: nil, onBetrayal: false)
+    let total = a.map(\.hold).reduce(0, +)
+    check(total >= 20 && total <= 40, "demo length \(total)s")
+    check(Set(a.map(\.mood)) == Set(Mood.allCases), "demo covers every mood")
+    check(a.last?.mood == .forgiving && a.filter(\.waitForSorry).count == 1, "ends forgiving after one sorry beat")
+    check(a.contains { $0.action == .hideApp } && !b.contains { $0.action == .hideApp }, "hide only on betrayal")
+    check(a[0].text.contains("Cowboys"), "topic in opener")
+    check(a.allSatisfy { !$0.text.contains("{") && $0.text.count <= 220 }, "lines fit the box")
+}
+
 print("\(passes) passed, \(failures) failed")
 exit(failures == 0 ? 0 : 1)

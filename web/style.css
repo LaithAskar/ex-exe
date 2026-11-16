@@ -65,4 +65,6 @@ button:active { transform: translate(1px,1px); }
 .summon #stage { animation: summon .6s cubic-bezier(.2,1.6,.4,1); }
 @keyframes summon { 0% { transform: scale(.85); } 100% { transform: scale(1); } }
 .spotlight #box { box-shadow: 0 0 0 4px #0c0612, 0 0 40px 10px rgba(255,79,163,.8); }
+.pulse #sorry { animation: pulse .5s steps(2) infinite; }
+@keyframes pulse { 50% { background: #ff4fa3; color: #0c0612; transform: scale(1.12); } }
 .handsoff #hud::after { content: "HANDS-OFF"; position: absolute; right: 8px; top: 8px; font-size: 9px; color: #7dffb0; }

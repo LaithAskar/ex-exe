@@ -38,6 +38,7 @@ function launch({ headless, url, profile = PROFILE }) {
   const a = [
     `--user-data-dir=${profile}`, "--no-first-run", "--no-default-browser-check",
     "--disable-extensions", "--disable-sync", "--mute-audio",
+    "--disable-component-update", "--disable-background-networking", "--no-service-autorun",
   ];
   if (headless) {
     a.push("--headless=new", `--remote-debugging-port=${PORT}`, "--remote-allow-origins=*", "--window-size=1200,2200");

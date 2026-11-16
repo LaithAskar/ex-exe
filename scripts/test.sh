@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "${0:A:h}/.."
 mkdir -p build
-swiftc -swift-version 5 Sources/Mood.swift Sources/Policy.swift Sources/Lines.swift Sources/Config.swift Sources/State.swift Tests/main.swift -o build/tests
+swiftc -swift-version 5 Sources/Mood.swift Sources/Policy.swift Sources/Lines.swift Sources/Config.swift Sources/State.swift Sources/Demo.swift Tests/main.swift -o build/tests
 ./build/tests
 echo "--- x_reader extractors (fixture) ---"
 node scripts/x_reader.mjs --fixture Tests/fixtures/x_home.html | python3 -c '

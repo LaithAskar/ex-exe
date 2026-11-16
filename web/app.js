@@ -64,13 +64,14 @@
     },
     fx({ name }) {
       document.body.classList.add(name);
-      setTimeout(() => document.body.classList.remove(name), name === "spotlight" ? 3200 : 700);
+      const dur = { spotlight: 3200, pulse: 8000 }[name] || 700;
+      setTimeout(() => document.body.classList.remove(name), dur);
       if (name === "shake") puff("!?", "#ffd36b");
     },
   };
 
   $("ack").onclick = () => { post({ type: "ack" }); $("caret").classList.remove("on"); };
-  $("sorry").onclick = () => post({ type: "sorry" });
+  $("sorry").onclick = () => { document.body.classList.remove("pulse"); post({ type: "sorry" }); };
   $("box").onclick = (e) => { if (e.target.tagName !== "BUTTON") post({ type: "ack" }); };
 
   // idle blink
