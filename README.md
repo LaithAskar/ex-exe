@@ -4,14 +4,22 @@ A pixel-art ex-girlfriend named Vex who lives in the corner of your Mac, notices
 
 Native Swift + a WKWebView for the game UI. **Zero third-party dependencies.**
 
+![Vex catching me on YouTube](docs/demo.gif)
+
+*Scripted demo (`⌃⌥⌘D`) recorded on a real Mac. Background blurred.*
+
 ![Vex in every mood](docs/screenshots/vex-sheet.png)
 
 ## Run
 
+Requires macOS 14+ and the Xcode command line tools (`xcode-select --install`). The X reader also needs Node 22+ and Google Chrome.
+
 ```sh
-./scripts/run.sh      # builds if needed, refreshes topics, launches in background
+git clone https://github.com/LaithAskar/ex-exe && cd ex-exe
+./scripts/run.sh      # builds if needed, refreshes topics, launches her
+./scripts/demo.sh     # 36s scripted run through every mood (open YouTube first)
 ./scripts/stop.sh
-./scripts/test.sh     # unit tests for the mood engine, policy, cadence, lines, config
+./scripts/test.sh     # unit tests: mood engine, action policy, cadence, lines, config, demo, X extractors
 tail -f logs/exe.log  # everything she sees, says, and does
 ```
 
@@ -29,6 +37,7 @@ The model is set in `data/config.json` (`llm.model`, default `qwen/qwen3.8-flash
 |---|---|
 | ⌃⌥⌘X | Hands-off: she can talk but can't touch your screen |
 | ⌃⌥⌘M | Mute voice |
+| ⌃⌥⌘D | Run / cancel the scripted demo |
 | ⌃⌥⌘Q | Quit |
 | Menu-bar heart | Same toggles plus Apologize; shows affection |
 | `[ ok ok ]` / click box | Acknowledge her (small relief; ignoring her for 60s costs you) |
@@ -68,7 +77,9 @@ Every 30 min (and on `run.sh`), `scripts/refresh_topics.py` merges:
 1. **X**: `scripts/x_reader.mjs` reads your home timeline and the trending tab using headless Chrome over the DevTools protocol. It uses a **dedicated profile** at `~/.config/ex-exe/chrome-x`, not your main Chrome profile. It only reads the DOM: no clicks, likes, posts, or follows. It picks the top ~12 tweets by likes plus ~10 trends, strips links, and skips ads. Data older than 12h is ignored.
 2. **Hacker News** top stories (public API), as a fallback when X is unavailable.
 
-One-time X setup (you log in yourself; the agent never sees your password):
+She reads these out loud, so the filter is strict: slurs, profanity, sexual content, politics, and violence are always dropped, and tweets must be about tech by default (`EXE_X_MODE=any` to loosen). If the trends page comes back empty, the last good trends from the past 12h are kept.
+
+One-time X setup. You log in yourself in a normal Chrome window; the script never handles your password:
 
 ```sh
 node scripts/x_reader.mjs --login   # opens a separate Chrome window -> log into X -> close it
@@ -87,6 +98,17 @@ If X shows a login wall later (session expired), the reader exits 3 and she fall
 Quitting her (⌃⌥⌘Q, menu, or `launchctl`/`pkill`, since SIGTERM is caught) keeps her quit until next login.
 
 Her grudge is saved to `data/state.json` every minute and on quit. It cools off at 6 points/hour while she's closed. Quit her mid-fight and relaunch within an hour and she opens with "You QUIT me? While I was mad? Bold."
+
+## Design decisions
+
+The interesting part isn't the jokes, it's keeping an app that can grab your cursor and hide your windows safe and predictable.
+
+- **The LLM can't act.** It only returns a string for the dialogue box. Every screen action comes from `ActionPolicy`: a fixed whitelist, chosen by mood, with a 5-minute cooldown, a hands-off hotkey, and a protected-apps list (editors and terminals are never touched). Prompt injection from a tweet can make her say something dumb; it can't make her do anything.
+- **Mood is a state machine, not vibes.** `MoodEngine` is pure Swift with no AppKit, so the whole emotional arc is unit-tested by feeding it fake time. The LLM gets the current mood as input instead of deciding it, which keeps her consistent and cheap.
+- **Absence isn't neglect.** Locked screen, sleeping display, or 10+ minutes idle freezes her. Bug found in testing: she used to scold the macOS login window.
+- **Reversible actions only.** "Hide app" is `NSRunningApplication.hide()`, and Cmd-Tab brings it back. No closing, typing, or clicking, and no Accessibility permission needed.
+- **Read-only, isolated scraping.** The X reader drives headless Chrome over the DevTools protocol in its own profile, reads the DOM, and never clicks anything. The extractors are tested against a fixture page that mimics X's markup, ads and promoted trends included.
+- **State survives restarts.** The grudge is persisted with time-based decay, and `SIGTERM` is routed through a clean quit so `launchctl`/`pkill` don't lose it.
 
 ## Tuning
 
