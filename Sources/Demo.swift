@@ -13,15 +13,21 @@ struct DemoStep {
 }
 
 enum DemoScript {
-    static func steps(app: String, topic: String?, onBetrayal: Bool) -> [DemoStep] {
-        let opener = topic.map { "Oh, you're back. Did you see \($0)? You'd know if you ever talked to me." }
-            ?? "Oh, you're back. Took you long enough."
+    static func steps(app fullApp: String, topic: String?, onBetrayal: Bool) -> [DemoStep] {
+        let app = Lines.spoken(fullApp)
+        let opener: String
+        switch (onBetrayal, topic) {
+        case let (true, t?): opener = "Hi. Did you see \(t)? No? Because you're on \(app) instead of talking to me."
+        case (true, nil):    opener = "Oh. \(app). Again. Hi, I guess."
+        case let (false, t?): opener = "Oh, you're back. Did you see \(t)? You'd know if you ever talked to me."
+        case (false, nil):   opener = "Oh, you're back. Took you long enough."
+        }
         let hide: DemoStep = onBetrayal
             ? DemoStep(mood: .furious, affection: 8, text: "There. \(app) is gone. You're welcome.", action: .hideApp, hold: 3.5, waitForSorry: false)
             : DemoStep(mood: .furious, affection: 8, text: "Close \(app). Now.", action: .sigh, hold: 3.0, waitForSorry: false)
         return [
-            DemoStep(mood: .chill, affection: 91, text: opener, action: nil, hold: 6.0, waitForSorry: false),
-            DemoStep(mood: .passiveAggressive, affection: 72, text: "Oh. \(app). Cool. Love that for you.", action: nil, hold: 3.8, waitForSorry: false),
+            DemoStep(mood: .chill, affection: 91, text: Lines.tidy(opener), action: nil, hold: 6.0, waitForSorry: false),
+            DemoStep(mood: .passiveAggressive, affection: 72, text: "Still on \(app). Cool. Love that for you.", action: nil, hold: 3.8, waitForSorry: false),
             DemoStep(mood: .scolding, affection: 46, text: "\(app)? Really? You said you'd do LeetCode today.", action: .summon, hold: 4.2, waitForSorry: false),
             DemoStep(mood: .furious, affection: 19, text: "THAT'S IT. I'm taking the screen.", action: .dim, hold: 3.6, waitForSorry: false),
             DemoStep(mood: .furious, affection: 12, text: "Look. At. Me.", action: .nudgeCursor, hold: 2.6, waitForSorry: false),

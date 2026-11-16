@@ -99,8 +99,6 @@ final class TopicPool {
         let pick = (fresh.isEmpty ? file.topics : fresh).randomElement()!
         recent.append(pick.title)
         if recent.count > 8 { recent.removeFirst() }
-        var t = pick.title
-        if t.count > 70 { t = String(t.prefix(67)) + "..." }
-        return t
+        return Lines.clip(pick.title, 70)
     }
 }

@@ -169,8 +169,24 @@ do {
     check(Set(a.map(\.mood)) == Set(Mood.allCases), "demo covers every mood")
     check(a.last?.mood == .forgiving && a.filter(\.waitForSorry).count == 1, "ends forgiving after one sorry beat")
     check(a.contains { $0.action == .hideApp } && !b.contains { $0.action == .hideApp }, "hide only on betrayal")
-    check(a[0].text.contains("Cowboys"), "topic in opener")
+    check(a[0].text.contains("Cowboys") && a[0].text.contains("on YouTube instead"), "betrayal opener names the site: \(a[0].text)")
+    check(a.allSatisfy { !$0.text.contains("in Google Chrome") }, "speech uses short site name")
+    check(b[0].text == "Oh, you're back. Took you long enough.", "neutral opener")
     check(a.allSatisfy { !$0.text.contains("{") && $0.text.count <= 220 }, "lines fit the box")
+}
+
+// 14. Punctuation + clipping polish.
+do {
+    check(Lines.spoken("YouTube in Google Chrome") == "YouTube" && Lines.spoken("Cursor") == "Cursor", "spoken name")
+    let long = "Who is Hiring? postings stuck near 12-year lows as AI reaches half of all new listings everywhere"
+    let c = Lines.clip(long, 70)
+    check(c.count <= 70 && c.hasSuffix("…") && !c.hasSuffix(" …") && !c.contains("..."), "clip on word boundary: \(c)")
+    let ctx = LineContext(mood: .chill, event: .periodic, appLabel: "x", minutesOnApp: 1, affection: 90, topic: c)
+    let line = Lines.fill("everyone's arguing about {topic}. You'd know", ctx)
+    check(!line.contains("….") && !line.contains("...."), "no four dots: \(line)")
+    check(Lines.tidy("Did you see Is Rust worth it?? No?") == "Did you see Is Rust worth it? No?", "double question")
+    check(Lines.tidy("about Rust 2.0!. You") == "about Rust 2.0! You", "bang-period")
+    check(Lines.tidy("Version 1.2.3 is out.") == "Version 1.2.3 is out.", "normal dots untouched")
 }
 
 print("\(passes) passed, \(failures) failed")

@@ -77,12 +77,34 @@ enum Lines {
         return fill(choices[random(choices.count)], ctx)
     }
 
+    /// "YouTube in Google Chrome" -> "YouTube". Full label stays in the UI; speech gets the short one.
+    static func spoken(_ label: String) -> String {
+        label.components(separatedBy: " in ").first.map { $0.isEmpty ? label : $0 } ?? label
+    }
+
+    /// Trim to `max` chars on a word boundary with a single ellipsis character.
+    static func clip(_ s: String, _ max: Int) -> String {
+        guard s.count > max else { return s }
+        let cut = String(s.prefix(max - 1))
+        let word = cut.range(of: " ", options: .backwards).map { String(cut[..<$0.lowerBound]) } ?? cut
+        return word.trimmingCharacters(in: CharacterSet(charactersIn: " ,;:-.")) + "…"
+    }
+
+    /// Fix punctuation where a topic ending in ".", "?", "!" or "…" meets template punctuation.
+    static func tidy(_ s: String) -> String {
+        var out = s
+        for (bad, good) in [("….", "…"), ("…?", "…"), ("....", "..."), ("?.", "?"), ("!.", "!"), (".?", "?"), ("?" + "?", "?")] {
+            out = out.replacingOccurrences(of: bad, with: good)
+        }
+        return out
+    }
+
     static func fill(_ template: String, _ ctx: LineContext) -> String {
-        template
-            .replacingOccurrences(of: "{app}", with: ctx.appLabel)
+        tidy(template
+            .replacingOccurrences(of: "{app}", with: spoken(ctx.appLabel))
             .replacingOccurrences(of: "{min}", with: String(max(1, ctx.minutesOnApp)))
             .replacingOccurrences(of: "{topic}", with: ctx.topic ?? "literally anything")
-            .replacingOccurrences(of: "{aff}", with: String(ctx.affection))
+            .replacingOccurrences(of: "{aff}", with: String(ctx.affection)))
     }
 
     /// Trim LLM output to something that fits the dialogue box.
