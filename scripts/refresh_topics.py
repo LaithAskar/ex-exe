@@ -66,7 +66,7 @@ def x_topics():
         updated = datetime.fromisoformat(data["updated"].replace("Z", "+00:00"))
         if (datetime.now(timezone.utc) - updated).total_seconds() > X_MAX_AGE_H * 3600:
             return []
-        return [{"title": t["title"], "url": t.get("url"), "source": "x"} for t in data.get("topics", []) if t.get("title")]
+        return [{"title": t["title"], "url": t.get("url"), "source": "x", "kind": t.get("kind")} for t in data.get("topics", []) if t.get("title")]
     except (OSError, ValueError, KeyError, TypeError):
         return []
 

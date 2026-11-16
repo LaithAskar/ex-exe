@@ -10,7 +10,7 @@
 //   node scripts/x_reader.mjs --status       print whether the profile looks logged in
 
 import { spawn, execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync, renameSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, renameSync, realpathSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -187,6 +187,18 @@ export function toTopics(tweets, trends, { mode = process.env.EXE_X_MODE || "tec
   return topics;
 }
 
+/// A flaky trends page shouldn't wipe out good trends from the last 12h.
+export function keepRecentTrends(topics, prevFile = OUT, now = Date.now()) {
+  if (topics.some((t) => t.kind === "trend")) return topics;
+  try {
+    const prev = JSON.parse(readFileSync(prevFile, "utf8"));
+    if (now - Date.parse(prev.updated) > 12 * 3600 * 1000) return topics;
+    const old = (prev.topics || []).filter((t) => t.kind === "trend");
+    if (old.length) log(`trends page came back empty; keeping ${old.length} trends from ${prev.updated}`);
+    return [...old, ...topics];
+  } catch { return topics; }
+}
+
 function writeOut(payload) {
   mkdirSync(dirname(OUT), { recursive: true });
   const tmp = OUT + ".tmp";
@@ -231,7 +243,8 @@ async function read({ fixture }) {
         await sleep(1800);
       }
       await goto(send, "https://x.com/explore/tabs/trending");
-      await waitFor(evaluate, `document.querySelector('[data-testid="trend"]')`, 12_000);
+      await waitFor(evaluate, `document.querySelector('[data-testid="trend"]')`, 25_000);
+      await sleep(1200); // trend cells stream in; give the list a beat to fill
       trends = (await evaluate(EXTRACT_TRENDS)) ?? [];
       if (process.env.EXE_X_DEBUG) {
         const raw = await evaluate(`[...document.querySelectorAll('[data-testid="trend"]')].slice(0,12).map(e => [...e.querySelectorAll('span')].map(x=>x.innerText).filter(Boolean))`);
@@ -240,7 +253,8 @@ async function read({ fixture }) {
     }
     ws.close();
     const uniq = [...new Map(tweets.map((t) => [t.text, t])).values()];
-    const topics = toTopics(uniq, trends);
+    let topics = toTopics(uniq, trends);
+    if (!fixture) topics = keepRecentTrends(topics);
     if (fixture) {
       console.log(JSON.stringify({ tweets: uniq, trends, topics }, null, 2));
     } else {

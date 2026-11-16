@@ -49,8 +49,14 @@ enum Paths {
     }
 }
 
+private let logFormatter: ISO8601DateFormatter = {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return f
+}()
+
 func log(_ msg: String) {
-    let ts = ISO8601DateFormatter().string(from: Date())
+    let ts = logFormatter.string(from: Date())
     print("[\(ts)] \(msg)")
     fflush(stdout)
 }
@@ -85,18 +91,21 @@ func deepMerge(_ base: [String: Any], _ over: [String: Any]) -> [String: Any] {
     return out
 }
 
-struct Topic: Codable { let title: String; let url: String?; let source: String? }
+struct Topic: Codable { let title: String; let url: String?; let source: String?; let kind: String? }
 struct TopicFile: Codable { let updated: String?; let topics: [Topic] }
 
 final class TopicPool {
     private var recent: [String] = []
 
-    func next() -> String? {
+    /// preferTrend: short X trend names read better out loud than tweet snippets (used by the demo).
+    func next(preferTrend: Bool = false) -> String? {
         guard let data = try? Data(contentsOf: Paths.topics),
               let file = try? JSONDecoder().decode(TopicFile.self, from: data),
               !file.topics.isEmpty else { return nil }
-        let fresh = file.topics.filter { !recent.contains($0.title) }
-        let pick = (fresh.isEmpty ? file.topics : fresh).randomElement()!
+        let trends = file.topics.filter { $0.kind == "trend" }
+        let pool = (preferTrend && !trends.isEmpty) ? trends : file.topics
+        let fresh = pool.filter { !recent.contains($0.title) }
+        let pick = (fresh.isEmpty ? pool : fresh).randomElement()!
         recent.append(pick.title)
         if recent.count > 8 { recent.removeFirst() }
         return Lines.clip(pick.title, 70)

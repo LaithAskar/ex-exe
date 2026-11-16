@@ -270,7 +270,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let front = sensors.front()
         lastFront = front
         let label = front.category == .her ? "your computer" : front.label
-        let steps = DemoScript.steps(app: label, topic: topics.next(), onBetrayal: front.category == .betrayal)
+        let steps = DemoScript.steps(app: label, topic: topics.next(preferTrend: true), onBetrayal: front.category == .betrayal)
         demoRunning = true
         demoToken += 1
         demoItem.state = .on

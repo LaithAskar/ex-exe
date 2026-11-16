@@ -15,7 +15,9 @@ cat > "$PLIST" <<EOF
 <plist version="1.0">
 <dict>
   <key>Label</key><string>$LABEL</string>
-  <key>ProgramArguments</key><array><string>$ROOT/build/EXE.app/Contents/MacOS/EXE</string></array>
+  <!-- Launch through LaunchServices ("open"), not the bare binary: a bare-exec'd app's windows are skipped by
+       macOS screen *recording* (ScreenCaptureKit), so Vex would vanish from demo videos. -->
+  <key>ProgramArguments</key><array><string>$ROOT/scripts/launch.sh</string></array>
   <key>EnvironmentVariables</key>
   <dict>
     <key>EXE_HOME</key><string>$ROOT</string>
@@ -25,15 +27,11 @@ cat > "$PLIST" <<EOF
   <key>KeepAlive</key><false/>
   <key>LimitLoadToSessionType</key><string>Aqua</string>
   <key>ProcessType</key><string>Interactive</string>
-  <key>StandardOutPath</key><string>$ROOT/logs/exe.log</string>
-  <key>StandardErrorPath</key><string>$ROOT/logs/exe.log</string>
 </dict>
 </plist>
 EOF
 plutil -lint "$PLIST" >/dev/null
 
-# Replace any manually-started instance with the launchd-managed one.
-pkill -f "EXE.app/Contents/MacOS/EXE" 2>/dev/null || true
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-launchctl bootstrap "gui/$(id -u)" "$PLIST"
+launchctl bootstrap "gui/$(id -u)" "$PLIST"   # RunAtLoad -> launch.sh (restarts her if already running)
 echo "installed $PLIST - Vex now starts at login (and is running now)"
