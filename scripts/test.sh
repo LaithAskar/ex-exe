@@ -10,10 +10,12 @@ node scripts/x_reader.mjs --fixture Tests/fixtures/x_home.html | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
 titles = [t["title"] for t in d["topics"]]
-assert [t["name"] for t in d["trends"]] == ["Rust", "#LeetCode", "OpenAI"], d["trends"]
-assert not any("adco" in t or "toaster" in t for t in titles), "ad leaked"
-assert not any("@short" in t for t in titles), "too-short tweet leaked"
-assert titles[3].startswith("@crab"), "tweets not ranked by likes"
-assert "t.co" not in " ".join(titles), "links not stripped"
+assert [t["name"] for t in d["trends"]] == ["Cowboys", "Rust", "Election", "#LeetCode"], d["trends"]
+assert [t["context"] for t in d["trends"]][0] == "Sports · Trending"
+joined = " ".join(titles).lower()
+for bad in ["adco", "toaster", "@short", "t.co", "election", "fucking", "@angry", "@pol", "lasagna", "promoted", "earn rewards"]:
+    assert bad not in joined, "leaked: " + bad
+assert titles[:3] == ["Cowboys (trending in Sports on X)", "Rust (trending in Technology on X)", "#LeetCode (trending on X)"], titles
+assert titles[3].startswith("@crab") and titles[4].startswith("@somedev"), "tweets missing or not ranked by likes"
 print("x_reader fixture: ok (%d topics)" % len(titles))
 '

@@ -27,7 +27,8 @@ const log = (...a) => console.error("[x_reader]", ...a);
 
 function profileInUse() {
   try {
-    execFileSync("pgrep", ["-f", `--user-data-dir=${PROFILE}`], { stdio: "ignore" });
+    // "--" is required: the pattern itself starts with "--", which pgrep would otherwise parse as an option.
+    execFileSync("pgrep", ["-f", "--", `--user-data-dir=${PROFILE}`], { stdio: "ignore" });
     return true;
   } catch { return false; }
 }
@@ -92,13 +93,15 @@ const EXTRACT_TWEETS = `(() => {
   return out;
 })()`;
 
+// X trend cell spans, e.g. ["3","·","Sports · Trending","Cowboys","49ers"]; promoted cells say "Promoted by ...".
 const EXTRACT_TRENDS = `(() => {
   const out = [];
   for (const el of document.querySelectorAll('[data-testid="trend"]')) {
-    const lines = el.innerText.split('\\n').map(s => s.trim()).filter(Boolean);
-    const name = lines.find(l => !/^(\\d+\\s*·\\s*)?Trending|^·$|posts$|^\\d+$|^Only on X/i.test(l) && !/^[\\d.,]+[KM]?$/i.test(l));
-    const context = lines.find(l => /Trending/i.test(l)) || null;
-    if (name) out.push({ name, context });
+    const spans = [...el.querySelectorAll('span')].map(s => s.innerText.trim()).filter(Boolean);
+    if (spans.some(t => /^Promoted\b/i.test(t))) continue;
+    const i = spans.findIndex(t => /Trending/i.test(t));
+    if (i < 0 || !spans[i + 1]) continue;
+    out.push({ name: spans[i + 1], context: spans[i] });  // parsed in Node (see trendCategory) to keep this template escape-free
   }
   return out;
 })()`;
@@ -124,25 +127,61 @@ async function goto(send, url) {
   await sleep(1500);
 }
 
-function shorten(s, n) {
-  s = s.replace(/\s+/g, " ").replace(/https?:\/\/\S+/g, "").trim();
+// Vex reads these out loud, in a corner of your screen, possibly on a stream or demo video.
+// Hard block: slurs, profanity, sexual content, politics, violence/tragedy. Applies to trends and tweets.
+const BLOCK = new RegExp([
+  "\\bf+u+c+k", "\\bwtf", "\\bshit", "\\bcunt", "\\bbitch", "\\bnigg", "\\bfag", "\\bretard", "\\bwhore", "\\bslut", "\\btrann",
+  "\\bdick\\b", "\\bpussy", "\\bporn", "\\bnsfw", "\\bonlyfans", "\\bsex", "\\bnude",
+  "trump", "biden", "harris", "vance", "mamdani", "democrat", "republican", "\\bgop\\b", "maga", "election", "congress",
+  "senat", "israel", "palestin", "gaza", "hamas", "ukrain", "russia", "putin", "zionis", "antisemit", "islam", "immigra", "\\bice\\b",
+  "abortion", "\\bwar\\b", "shooting", "killed", "murder", "dead\\b", "death", "rape", "terror", "suicide",
+].join("|"), "i");
+
+// Default mode: tweets must be about tech. Trends (mostly sports/pop culture) only need to pass BLOCK.
+const TECH = /\b(dsa|llm|gpt|claude|opus|gemini|openai|anthropic|codex|cursor|copilot|agents?|model|code|coding|coder|dev|devs|developer|engineer|engineering|software|programming|bug|deploy|prod|api|rust|python|javascript|typescript|react|swift|golang|linux|github|git|leetcode|interview|startup|founder|yc|saas|cloud|aws|gpu|nvidia|apple|mac|iphone|android|google|microsoft|tech|app|open source|database|sql|kubernetes|docker|backend|frontend|compiler|hackathon|ship|shipped)s?\b/i;
+
+const EMOJI = /[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{FE0F}\u{200D}]/gu;
+
+// "Sports · Trending" -> "Sports", "Trending in Technology" -> "Technology", "Trending" -> null
+export function trendCategory(context) {
+  const c = (context || "").replace(/\bTrending\b/i, "").replace(/^\s*in\s+/i, "").replace(/[·\s]+$/, "").replace(/^[·\s]+/, "").trim();
+  return c || null;
+}
+
+export function clean(s, n) {
+  s = s.replace(EMOJI, "").replace(/https?:\/\/\S+/g, "").replace(/\s+/g, " ").trim();
   return s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s;
 }
 
-export function toTopics(tweets, trends) {
+export function allowed(text, { mode = "tech" } = {}) {
+  if (BLOCK.test(text)) return false;
+  return mode === "any" || TECH.test(text);
+}
+
+export function toTopics(tweets, trends, { mode = process.env.EXE_X_MODE || "tech" } = {}) {
   const seen = new Set();
   const topics = [];
-  for (const t of trends.slice(0, 10)) {
-    if (seen.has(t.name)) continue;
-    seen.add(t.name);
-    topics.push({ title: `${t.name} (trending on X)`, url: null, source: "x", kind: "trend" });
+  for (const t of trends) {
+    if (topics.length >= 8) break;
+    const name = clean(t.name, 40);
+    const category = t.category ?? trendCategory(t.context);
+    if (!name || seen.has(name.toLowerCase()) || BLOCK.test(name) || BLOCK.test(category || "")) continue;
+    seen.add(name.toLowerCase());
+    const where = category ? ` in ${category}` : "";
+    topics.push({ title: `${name} (trending${where} on X)`, url: null, source: "x", kind: "trend" });
   }
-  const ranked = [...tweets].filter((t) => t.text.length >= 25).sort((a, b) => b.likes - a.likes).slice(0, 12);
+  const ranked = tweets
+    .map((t) => ({ ...t, text: clean(t.text, 400) }))
+    .filter((t) => t.text.length >= 25 && allowed(t.text, { mode }))
+    .sort((a, b) => b.likes - a.likes);
+  let n = 0;
   for (const t of ranked) {
-    const key = t.text.slice(0, 40);
+    if (n >= 12) break;
+    const key = t.text.slice(0, 40).toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    topics.push({ title: `${t.handle ?? "someone"} on X: ${shorten(t.text, 90)}`, url: t.url, source: "x", kind: "tweet" });
+    topics.push({ title: `${t.handle ?? "someone"} on X: ${clean(t.text, 90)}`, url: t.url, source: "x", kind: "tweet" });
+    n++;
   }
   return topics;
 }
@@ -193,6 +232,10 @@ async function read({ fixture }) {
       await goto(send, "https://x.com/explore/tabs/trending");
       await waitFor(evaluate, `document.querySelector('[data-testid="trend"]')`, 12_000);
       trends = (await evaluate(EXTRACT_TRENDS)) ?? [];
+      if (process.env.EXE_X_DEBUG) {
+        const raw = await evaluate(`[...document.querySelectorAll('[data-testid="trend"]')].slice(0,12).map(e => [...e.querySelectorAll('span')].map(x=>x.innerText).filter(Boolean))`);
+        console.error(JSON.stringify(raw));
+      }
     }
     ws.close();
     const uniq = [...new Map(tweets.map((t) => [t.text, t])).values()];
